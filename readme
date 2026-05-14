@@ -1,0 +1,94 @@
+## ROS2 Benchmark Parameters
+
+### Central Subscriber
+
+Run:
+
+```bash
+ros2 run node_central node_central
+```
+
+Optional parameters:
+
+| Parameter                | Type | Default | Description                                                                           |
+| ------------------------ | ---- | ------- | ------------------------------------------------------------------------------------- |
+| `benchmark_duration_sec` | int  | `180`   | Benchmark duration in seconds. Starts counting only after the first received message. |
+
+Example:
+
+```bash
+ros2 run node_central node_central \
+--ros-args \
+-p benchmark_duration_sec:=300
+```
+
+---
+
+### Sensor Publisher
+
+Run:
+
+```bash
+ros2 run cassio_driver sensor_node
+```
+
+Optional parameters:
+
+| Parameter         | Type | Default | Description                                 |
+| ----------------- | ---- | ------- | ------------------------------------------- |
+| `sensor_count`    | int  | `1`     | Number of simulated sensors.                |
+| `publish_rate_hz` | int  | `100`   | Publish frequency per sensor.               |
+| `payload_size_kb` | int  | `20`    | Payload size in KB for each message.        |
+| `hardware_id`     | int  | `1`     | Identifier for the physical machine/device. |
+
+Example:
+
+```bash
+ros2 run cassio_driver sensor_node \
+--ros-args \
+-p sensor_count:=100 \
+-p publish_rate_hz:=100 \
+-p payload_size_kb:=20 \
+-p hardware_id:=1
+```
+
+---
+
+### DDS Configuration
+
+Recommended DDS implementation:
+
+```bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+```
+
+Recommended before running both nodes.
+
+---
+
+### Benchmark Metrics
+
+The central node computes:
+
+* Message loss
+* Average latency
+* Maximum latency
+* Average jitter
+* Messages received per sensor
+
+Results are automatically saved to:
+
+```text
+benchmark_results.csv
+```
+
+ros2 run cassio_driver sensor_node \
+--ros-args \
+-p sensor_count:=5 \
+-p publish_rate_hz:=100 \
+-p payload_size_kb:=20 \
+-p hardware_id:=1
+
+ros2 run node_central node_central \
+--ros-args \
+-p benchmark_duration_sec:=30
