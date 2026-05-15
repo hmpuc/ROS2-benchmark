@@ -20,6 +20,7 @@ struct SensorStats {
     double max_latency_ms = 0.0;
 
     double jitter_sum_ms = 0.0;
+    double max_jitter_ms = 0.0;
     double last_latency_ms = 0.0;
 };
 
@@ -144,6 +145,10 @@ private:
             double jitter_ms = std::abs(latency_ms - stats.last_latency_ms);
 
             stats.jitter_sum_ms += jitter_ms;
+
+            if (jitter_ms > stats.max_jitter_ms) {
+                stats.max_jitter_ms = jitter_ms;
+            }
         }
 
         stats.last_latency_ms = latency_ms;
@@ -188,7 +193,8 @@ private:
             << "loss_percent;"
             << "avg_latency_ms;"
             << "max_latency_ms;"
-            << "avg_jitter_ms\n";
+            << "avg_jitter_ms;"
+            << "max_jitter_ms\n";
 
         //
         // Per sensor statistics
@@ -224,7 +230,8 @@ private:
                 << loss_percent << ";"
                 << avg_latency_ms << ";"
                 << stats.max_latency_ms << ";"
-                << avg_jitter_ms
+                << avg_jitter_ms << ";"
+                << stats.max_jitter_ms
                 << "\n";
         }
 
