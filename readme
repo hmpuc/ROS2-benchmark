@@ -91,4 +91,10 @@ ros2 run cassio_driver sensor_node \
 
 ros2 run node_central node_central \
 --ros-args \
--p benchmark_duration_sec:=30
+-p benchmark_duration_sec:=30 \
+-p benchmark_number:=\"0\" \
+-p sensor_count:=\"1\"
+
+docker run -it --name ros2_humble --net=host -v "/home/praticap/ros2:/root/ros2" osrf/ros:humble-desktop
+
+docker exec -it ros2_humble /bin/bash

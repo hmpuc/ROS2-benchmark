@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <cstdint>
 #include <cmath>
+#include <filesystem>
 
 #include "rclcpp/rclcpp.hpp"
 #include "cassio_interface/msg/cassio.hpp"
@@ -40,6 +41,22 @@ public:
         benchmark_duration_sec_ =
             this->get_parameter(
                 "benchmark_duration_sec").as_int();
+
+        this->declare_parameter<std::string>(
+            "benchmark_number",
+            "-1");
+
+        benchmark_number =
+            this->get_parameter(
+                "benchmark_number").as_string();
+
+        this->declare_parameter<std::string>(
+            "sensor_count",
+            "0");
+
+        sensor_count =
+            this->get_parameter(
+                "sensor_count").as_string();
 
 
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1000)).reliable();
@@ -86,8 +103,6 @@ private:
                 this->get_logger(),
                 "Benchmark started");
         }
-
-
         
         //
         // Current receive timestamp
@@ -176,7 +191,10 @@ private:
     }
 
     void save_csv() {
-        std::ofstream file("benchmark_results.csv", std::ios::out);
+
+        std::filesystem::create_directories("benchmarks");
+        
+        std::ofstream file("benchmarks/benchmark_results_" + sensor_count + "_" + benchmark_number +".csv", std::ios::out);
 
         if (!file.is_open()) {
             RCLCPP_ERROR(this->get_logger(), "Failed to open CSV file");
@@ -250,6 +268,10 @@ private:
     bool benchmark_started_ = false;
 
     int benchmark_duration_sec_ = 180;
+
+    std::string benchmark_number = "-1"; 
+
+    std::string sensor_count = "0";
 
     rclcpp::Time benchmark_start_time_;
 
