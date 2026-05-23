@@ -2,9 +2,11 @@
 #include <string>
 #include <memory>
 #include <chrono>
+#include <thread>
 
 #include "rclcpp/rclcpp.hpp"
 #include "cassio_interface/msg/cassio.hpp"
+#include "std_msgs/msg/empty.hpp"
 
 class SensorPublisher : public rclcpp::Node {
 public:
@@ -27,6 +29,17 @@ public:
         this->declare_parameter<int>(
             "hardware_id", 1);
 
+		this->declare_parameter<int>(
+   			"instance_count", 1);
+
+		instance_count_ =
+    		this->get_parameter(
+        		"instance_count").as_int();
+
+		if (instance_count_ <= 0) {
+		    throw std::runtime_error("instance_count must be > 0");
+		}
+
         sensor_count_ =
             this->get_parameter(
                 "sensor_count").as_int();
@@ -44,22 +57,41 @@ public:
             this->get_parameter(
                 "hardware_id").as_int();
 
-        //
+		this->declare_parameter<int>(
+			"benchmark_duration_sec",
+			180);
+
+		benchmark_duration_sec_ =
+    		this->get_parameter(
+        	"benchmark_duration_sec").as_int();
+        
+		
         // QoS
-        //
         auto qos =
             rclcpp::QoS(
-                rclcpp::KeepLast(1000))
+                rclcpp::KeepLast(4096))
                 .reliable();
+
+		auto start_qos = rclcpp::QoS(rclcpp::KeepLast(1))
+			.reliable()
+			.transient_local();
 
         //
         // Publisher
         //
-        publisher_ =
-            this->create_publisher<
-                cassio_interface::msg::Cassio>(
-                    "CassioData",
-                    qos);
+
+		for (int i = 0; i < instance_count_; i++) {
+
+			std::string topic_name =
+				"CassioData_" +
+				std::to_string(i);
+
+			publishers_.push_back(
+				this->create_publisher<
+					cassio_interface::msg::Cassio>(
+						topic_name,
+						qos));
+		}
 
         //
         // Create sensors
@@ -77,18 +109,19 @@ public:
 
             sensor.name =
                 "Cassio_x" +
-                std::to_string(i);
+                (std::to_string((hardware_id_ * sensor_count_) + i));
 
             sensor.sequence = 0;
 
-            sensor.payload.resize(
-                payload_size_bytes_,
-                0xAA);
+			sensor.topic_index = 
+				std::hash<std::string>{}( sensor.name) % instance_count_;
 
+			sensor.msg.raw_data.resize(payload_size_bytes_, 0xAA);
+			
             //
             // One timer per sensor
             //
-            sensor.timer =
+			sensor.timer =
                 this->create_wall_timer(
                     period,
 
@@ -97,6 +130,20 @@ public:
                         this->publish_sensor(i);
                     });
         }
+
+		start_subscription_ =
+			this->create_subscription<std_msgs::msg::Empty>(
+				"/benchmark_start_signal",
+				start_qos,
+				std::bind(
+					&SensorPublisher::start_signal_callback,
+					this,
+					std::placeholders::_1));
+
+		benchmark_timer_ =
+			this->create_wall_timer(
+				std::chrono::milliseconds(200),
+				std::bind(&SensorPublisher::check_benchmark, this));
 
         RCLCPP_INFO(
             this->get_logger(),
@@ -116,6 +163,10 @@ public:
             this->get_logger(),
             "Payload: %d bytes",
             payload_size_bytes_);
+
+		RCLCPP_INFO(
+			this->get_logger(),
+			"Waiting benchmark start signal");
     }
 
 private:
@@ -126,16 +177,44 @@ private:
 
         uint64_t sequence;
 
-        std::vector<uint8_t> payload;
+		cassio_interface::msg::Cassio msg;
+
+		size_t topic_index;
 
         rclcpp::TimerBase::SharedPtr timer;
     };
 
+	void start_signal_callback(const std_msgs::msg::Empty::SharedPtr)
+	{
+		if (start_signal_received_) {
+			return;
+		}
+
+		start_signal_received_ = true;
+		benchmark_start_ns_ =
+			(clock_.now() + rclcpp::Duration::from_seconds(5)).nanoseconds();
+
+		RCLCPP_INFO(
+			this->get_logger(),
+			"Benchmark start signal received. Scheduled start ns: %ld",
+			benchmark_start_ns_);
+	}
+
     void publish_sensor(size_t index)
     {
+		if (!start_signal_received_ || benchmark_finished_) {
+			return;
+		}
+
+		auto now = clock_.now();
+
+		if (now.nanoseconds() < benchmark_start_ns_) {
+		    return;
+		}
+
         auto &sensor = sensors_[index];
 
-        cassio_interface::msg::Cassio msg;
+		auto &msg = sensor.msg;
 
         msg.sensor_name =
             sensor.name;
@@ -146,26 +225,44 @@ private:
         msg.sequence =
             sensor.sequence++;
 
-        msg.source_timestamp_ns =
-            this->get_clock()
-                ->now()
-                .nanoseconds();
-
-        //
-        // Reuse payload
-        //
-        msg.raw_data =
-            sensor.payload;
+        msg.source_timestamp_ns = now.nanoseconds();
 
         //
         // Optional changing byte
         //
-        msg.raw_data[0] =
-            static_cast<uint8_t>(
-                msg.sequence % 255);
+        msg.raw_data[0] = static_cast<uint8_t>( msg.sequence % 255);
 
-        publisher_->publish(msg);
+        publishers_[sensor.topic_index] ->publish(msg);
     }
+
+	void check_benchmark()
+	{
+		if (!start_signal_received_ || benchmark_finished_) {
+			return;
+		}
+
+		auto now = clock_.now();
+
+		if (now.nanoseconds() < benchmark_start_ns_) {
+			return;
+		}
+
+		int64_t elapsed = now.nanoseconds() - benchmark_start_ns_;
+
+		if (elapsed >= benchmark_duration_sec_ * 1'000'000'000LL) {
+
+			if (!benchmark_finished_) {
+
+				benchmark_finished_ = true;
+
+				RCLCPP_INFO(
+					get_logger(),
+					"Benchmark finished");
+
+				rclcpp::shutdown();
+			}
+		}
+	}
 
 private:
 
@@ -179,11 +276,28 @@ private:
 
     int hardware_id_;
 
+	int instance_count_;
+
+	int64_t benchmark_start_ns_ = 0;
+
+	int benchmark_duration_sec_ = 180;
+
+	bool benchmark_finished_ = false;
+
+	bool start_signal_received_ = false;
+
     std::vector<SensorData> sensors_;
 
-    rclcpp::Publisher<
-        cassio_interface::msg::Cassio>::SharedPtr
-            publisher_;
+	std::vector<
+    	rclcpp::Publisher<
+        	cassio_interface::msg::Cassio>::SharedPtr>
+           	 publishers_;
+
+	rclcpp::TimerBase::SharedPtr benchmark_timer_;
+
+	rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr start_subscription_;
+
+	rclcpp::Clock clock_{RCL_STEADY_TIME};
 };
 
 int main(int argc, char * argv[])
@@ -196,7 +310,18 @@ int main(int argc, char * argv[])
     //
     // REAL concurrent publishers
     //
-    rclcpp::executors::MultiThreadedExecutor executor;
+
+	int threads = std::thread::hardware_concurrency();
+
+	if (threads <= 0) {
+		throw std::runtime_error("thread must be > 0");
+	}
+
+	printf("Threads: %d", threads);
+
+    rclcpp::executors::MultiThreadedExecutor executor(
+		rclcpp::ExecutorOptions(), 
+		threads);
 
     executor.add_node(node);
 

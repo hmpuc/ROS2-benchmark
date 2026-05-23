@@ -9,12 +9,13 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(cassio_interface REQUIRED)
+find_package(std_msgs REQUIRED)
 
 # Criar executável (ajusta o nome do .cpp se for diferente)
 add_executable(node_central src/node_central.cpp)
 
 # Linkar dependências
-ament_target_dependencies(node_central rclcpp cassio_interface)
+ament_target_dependencies(node_central rclcpp cassio_interface std_msgs)
 
 # Instalar executável (ESSENCIAL pro ros2 run funcionar)
 install(TARGETS

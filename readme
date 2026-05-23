@@ -1,6 +1,90 @@
-## ROS2 Benchmark Parameters
+# ROS2 DDS Distributed Benchmark
 
-### Central Subscriber
+## Overview
+
+This workspace implements a ROS2 benchmark for evaluating DDS behavior with many simulated sensors, distributed central subscribers and automatic CSV aggregation.
+
+The system supports:
+
+* Multi-topic publishing
+* Multi-instance central subscribers
+* Distributed benchmark collection
+* Start signal synchronization
+* Automatic CSV merge
+* Loss, latency and jitter analysis
+
+---
+
+## Docker
+
+The ROS2 environment is expected to run inside a Docker container. Build and run the workspace from inside the container, not from the host machine.
+
+Create the container, mounting this workspace into `/root/ros2_ws`:
+
+```bash
+docker run -it \
+  --name ros2_humble \
+  --network host \
+  -v "/home/praticap/ros2:/root/ros2_ws" \
+  osrf/ros:humble-desktop
+```
+
+Enter an existing container:
+
+```bash
+docker exec -it ros2_humble /bin/bash
+```
+
+Inside the container:
+
+```bash
+cd /root/ros2_ws
+. run_script.sh
+./clean_build.sh
+```
+
+If the container already exists but is stopped:
+
+```bash
+docker start ros2_humble
+docker exec -it ros2_humble /bin/bash
+```
+
+---
+
+## Benchmark Start Synchronization
+
+Synchronization is controlled by a ROS2 start signal:
+
+```text
+/benchmark_start_signal
+```
+
+Only `node_central` with:
+
+```text
+instance_id = 0
+```
+
+publishes the start signal.
+
+Every sensor and central node subscribes to this signal. When the signal is received, each node computes:
+
+```text
+benchmark_start = now + 5 seconds
+```
+
+The benchmark then runs until:
+
+```text
+benchmark_start + benchmark_duration_sec
+```
+
+The central instance `0` publishes the start signal repeatedly for a few seconds so nodes that are already starting up still receive it. The topic uses transient local QoS.
+
+---
+
+## Central Subscriber
 
 Run:
 
@@ -8,23 +92,34 @@ Run:
 ros2 run node_central node_central
 ```
 
-Optional parameters:
+Parameters:
 
-| Parameter                | Type | Default | Description                                                                           |
-| ------------------------ | ---- | ------- | ------------------------------------------------------------------------------------- |
-| `benchmark_duration_sec` | int  | `180`   | Benchmark duration in seconds. Starts counting only after the first received message. |
+| Parameter                | Type   | Default | Description                                      |
+| ------------------------ | ------ | ------- | ------------------------------------------------ |
+| `instance_id`            | int    | `0`     | Subscriber instance identifier                   |
+| `instance_count`         | int    | `1`     | Total subscriber instances                       |
+| `benchmark_number`       | string | `-1`    | Benchmark execution identifier                   |
+| `sensor_count`           | string | `0`     | Total sensor count identifier for CSV filenames  |
+| `benchmark_duration_sec` | int    | `180`   | Benchmark duration after scheduled start         |
+| `start_signal_delay_sec` | int    | `1`     | Delay before instance `0` starts publishing start |
+
+Each central instance listens to:
+
+```text
+CassioData_<instance_id>
+```
 
 Example:
 
-```bash
-ros2 run node_central node_central \
---ros-args \
--p benchmark_duration_sec:=300
+```text
+Instance 0 -> CassioData_0
+Instance 1 -> CassioData_1
+Instance 2 -> CassioData_2
 ```
 
 ---
 
-### Sensor Publisher
+## Sensor Publisher
 
 Run:
 
@@ -32,69 +127,280 @@ Run:
 ros2 run cassio_driver sensor_node
 ```
 
-Optional parameters:
+Parameters:
 
-| Parameter         | Type | Default | Description                                 |
-| ----------------- | ---- | ------- | ------------------------------------------- |
-| `sensor_count`    | int  | `1`     | Number of simulated sensors.                |
-| `publish_rate_hz` | int  | `100`   | Publish frequency per sensor.               |
-| `payload_size_kb` | int  | `20`    | Payload size in KB for each message.        |
-| `hardware_id`     | int  | `1`     | Identifier for the physical machine/device. |
+| Parameter                | Type | Default | Description                         |
+| ------------------------ | ---- | ------- | ----------------------------------- |
+| `sensor_count`           | int  | `1`     | Number of simulated sensors         |
+| `publish_rate_hz`        | int  | `100`   | Publish rate per sensor             |
+| `payload_size_kb`        | int  | `20`    | Payload size per message            |
+| `hardware_id`            | int  | `1`     | Physical/container identifier       |
+| `instance_count`         | int  | `1`     | Number of distributed topics        |
+| `benchmark_duration_sec` | int  | `180`   | Benchmark duration after start      |
 
-Example:
+Sensors are automatically distributed across topics:
+
+```text
+CassioData_0
+CassioData_1
+CassioData_2
+...
+```
+
+using:
+
+```cpp
+hash(sensor_name) % instance_count
+```
+
+Publishers wait for `/benchmark_start_signal`, schedule `now + 5s`, publish until `benchmark_duration_sec`, then shut down automatically.
+
+---
+
+## Recommended Test
+
+This example runs:
+
+```text
+100 sensors @ 100 Hz @ 20 KB payload
+5 central subscriber instances
+180 seconds benchmark duration
+```
+
+Open one shell per command inside the Docker container.
+
+In every shell:
+
+```bash
+cd /root/ros2_ws
+. run_script.sh
+```
+
+Recommended order:
+
+1. Start central instances `1` to `4`.
+2. Start the sensor publisher.
+3. Start central instance `0`.
+
+This makes the start signal happen after all other processes are already waiting. If instance `0` is started first, increase `start_signal_delay_sec`.
+
+Start central instance `1`:
+
+```bash
+ros2 run node_central node_central \
+  --ros-args \
+  -p instance_id:=1 \
+  -p instance_count:=5 \
+  -p benchmark_number:=\"0\" \
+  -p sensor_count:=\"100\" \
+  -p benchmark_duration_sec:=180
+```
+
+Start central instance `2`:
+
+```bash
+ros2 run node_central node_central \
+  --ros-args \
+  -p instance_id:=2 \
+  -p instance_count:=5 \
+  -p benchmark_number:=\"0\" \
+  -p sensor_count:=\"100\" \
+  -p benchmark_duration_sec:=180
+```
+
+Start central instance `3`:
+
+```bash
+ros2 run node_central node_central \
+  --ros-args \
+  -p instance_id:=3 \
+  -p instance_count:=5 \
+  -p benchmark_number:=\"0\" \
+  -p sensor_count:=\"100\" \
+  -p benchmark_duration_sec:=180
+```
+
+Start central instance `4`:
+
+```bash
+ros2 run node_central node_central \
+  --ros-args \
+  -p instance_id:=4 \
+  -p instance_count:=5 \
+  -p benchmark_number:=\"0\" \
+  -p sensor_count:=\"100\" \
+  -p benchmark_duration_sec:=180
+```
+
+Start the sensor publisher:
 
 ```bash
 ros2 run cassio_driver sensor_node \
---ros-args \
--p sensor_count:=100 \
--p publish_rate_hz:=100 \
--p payload_size_kb:=20 \
--p hardware_id:=1
+  --ros-args \
+  -p sensor_count:=100 \
+  -p publish_rate_hz:=100 \
+  -p payload_size_kb:=20 \
+  -p hardware_id:=1 \
+  -p instance_count:=5 \
+  -p benchmark_duration_sec:=180
 ```
 
----
-
-### DDS Configuration
-
-Recommended DDS implementation:
+Start central instance `0`. This one sends the start signal:
 
 ```bash
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+ros2 run node_central node_central \
+  --ros-args \
+  -p instance_id:=0 \
+  -p instance_count:=5 \
+  -p benchmark_number:=\"0\" \
+  -p sensor_count:=\"100\" \
+  -p benchmark_duration_sec:=180 \
+  -p start_signal_delay_sec:=3
 ```
-
-Recommended before running both nodes.
 
 ---
 
-### Benchmark Metrics
+## CSV Generation
 
-The central node computes:
+Each central instance generates a temporary CSV:
+
+```text
+benchmarks/tmp/benchmark_<sensor_count>_<benchmark_number>_instance_<id>.tmp.csv
+```
+
+After all instances finish:
+
+* Instance `0` waits for all `.done` files
+* Instance `0` merges all temporary CSVs
+* Temporary files are removed
+* A final consolidated benchmark CSV is generated
+
+Final CSV:
+
+```text
+benchmarks/benchmark_results_<sensor_count>_<benchmark_number>.csv
+```
+
+---
+
+## Benchmark Metrics
+
+The distributed subscriber framework computes:
 
 * Message loss
+* Loss percentage
 * Average latency
 * Maximum latency
 * Average jitter
-* Messages received per sensor
+* Maximum jitter
+* Received messages per sensor
 
-Results are automatically saved to:
+Each CSV row also contains:
+
+* `instance_id`
+* `sensor_name`
+
+---
+
+## Benchmark Flow
 
 ```text
-benchmark_results.csv
+Central instance 0 publishes /benchmark_start_signal
+        ↓
+Publishers and subscribers receive signal
+        ↓
+Each node schedules start = now + 5s
+        ↓
+Publishers start publishing
+        ↓
+Subscribers collect metrics
+        ↓
+Publishers stop after benchmark_duration_sec
+        ↓
+Subscribers stop after benchmark_duration_sec
+        ↓
+Temporary CSVs generated
+        ↓
+Instance 0 merges CSVs
+        ↓
+Final consolidated benchmark saved
 ```
 
-ros2 run cassio_driver sensor_node \
---ros-args \
--p sensor_count:=5 \
--p publish_rate_hz:=100 \
--p payload_size_kb:=20 \
--p hardware_id:=1
+---
 
-ros2 run node_central node_central \
---ros-args \
--p benchmark_duration_sec:=30 \
--p benchmark_number:=\"0\" \
--p sensor_count:=\"1\"
+## Useful Commands
 
-docker run -it --name ros2_humble --net=host -v "/home/praticap/ros2:/root/ros2" osrf/ros:humble-desktop
+Rebuild only the project packages:
 
-docker exec -it ros2_humble /bin/bash
+```bash
+./clean_build.sh
+```
+
+Check the start signal topic:
+
+```bash
+ros2 topic info /benchmark_start_signal
+```
+
+Check data topics:
+
+```bash
+ros2 topic list | grep CassioData
+```
+
+zip -r ros2.zip \
+  cassio_interface cassio_driver node_central scripts readme run_script.sh clean_build.sh \
+  -x '*/build/*' '*/install/*' '*/log/*' '*/benchmarks/*' '*.zip'
+
+---
+
+## Two-Machine Battery Script
+
+The script below is intended to run on the central machine. It starts `node_central` locally and starts `sensor_node` remotely through SSH on the sensor machine.
+
+```bash
+SENSOR_HOST=user@192.168.0.20 ./scripts/run_two_machine_battery.sh
+```
+
+Default battery:
+
+* Warmup from 2 to 20 sensors, one run per sensor count
+* Deletes `benchmarks` after warmup
+* Test phase from 2 to 100 sensors
+* 10 repetitions for each sensor count
+* Fixed payload: 20 KB
+* Fixed rate: 100 Hz
+* One central node and one sensor node
+
+Both Docker containers must be running with host networking:
+
+```bash
+docker run -it \
+  --name ros2_humble \
+  --net=host \
+  -v "/path/to/ros2_ws:/root/ros2_ws" \
+  osrf/ros:humble-desktop
+```
+
+Useful overrides:
+
+```bash
+SENSOR_HOST=user@192.168.0.20 \
+CENTRAL_CONTAINER=ros2_humble \
+SENSOR_CONTAINER=ros2_humble \
+ROS_DOMAIN_ID=42 \
+BENCHMARK_DURATION_SEC=180 \
+./scripts/run_two_machine_battery.sh
+```
+
+Logs are saved on the central machine in:
+
+```text
+battery_logs/
+```
+
+
+export ROS_DOMAIN_ID=31
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+export FASTRTPS_DEFAULT_PROFILES_FILE=/root/fastdds.xml
+export ROS_LOCALHOST_ONLY=0

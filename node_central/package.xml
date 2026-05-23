@@ -12,6 +12,8 @@
   <exec_depend>rclcpp</exec_depend>
   <build_depend>cassio_interface</build_depend>
   <exec_depend>cassio_interface</exec_depend>
+  <build_depend>std_msgs</build_depend>
+  <exec_depend>std_msgs</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
