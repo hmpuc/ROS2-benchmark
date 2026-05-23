@@ -33,7 +33,7 @@ public:
 
     CentralSubscriber()
         : Node("central_subscriber_"),
-          benchmark_start_wall_time_(int64_t{0}, RCL_STEADY_TIME)
+          benchmark_start_wall_time_(int64_t{0}, RCL_SYSTEM_TIME)
 	{
 
         this->declare_parameter<int>(
@@ -92,7 +92,7 @@ public:
 			throw std::runtime_error( "Invalid instance_id"); 
 		}
 
-        auto qos = rclcpp::QoS(rclcpp::KeepLast(4096)).reliable();
+        auto qos = rclcpp::QoS(rclcpp::KeepLast(128)).best_effort();
 
 		auto start_qos = rclcpp::QoS(rclcpp::KeepLast(1))
 			.reliable()
@@ -402,7 +402,7 @@ private:
 			this->get_logger(),
 			"Waiting all instances...");
 
-		auto start = std::chrono::steady_clock::now();
+		auto start = std::chrono::system_clock::now();
 
 		while (rclcpp::ok()) {
 
@@ -424,7 +424,7 @@ private:
 				}
 			}
 		
-			auto elapsed = std::chrono::steady_clock::now() - start;
+			auto elapsed = std::chrono::system_clock::now() - start;
 
 			if (elapsed > std::chrono::seconds(30)) {
 
@@ -594,11 +594,11 @@ private:
 
 	rclcpp::TimerBase::SharedPtr start_signal_timer_;
 
-	rclcpp::Time start_signal_publish_time_{int64_t{0}, RCL_STEADY_TIME};
+	rclcpp::Time start_signal_publish_time_{int64_t{0}, RCL_SYSTEM_TIME};
 
 	int start_signal_delay_sec_ = 1;
 
-	rclcpp::Clock clock_{RCL_STEADY_TIME};
+	rclcpp::Clock clock_{RCL_SYSTEM_TIME};
 };
 
 int main(int argc, char * argv[]) {

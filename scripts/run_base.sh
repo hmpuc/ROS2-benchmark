@@ -24,12 +24,12 @@ for ((i=2;i<21;i+=2)); do
 		--ros-args \
 		-p instance_id:=0 \
 		-p instance_count:=1\
-		-p benchmark_number:=\"warmup_${i}\" \
-		-p sensor_count:=\"${i}\" \
+		-p benchmark_number:=\\\"warmup_${i}\\\" \
+		-p sensor_count:=\\\"${i}\\\" \
 		-p benchmark_duration_sec:=180 \
 		-p start_signal_delay_sec:=3
 	"
-	sleep 30
+	sleep 5
 done
 
 rm -rf benchmarks
@@ -49,7 +49,7 @@ for i in {1..10}; do
 		-p benchmark_duration_sec:=180 
 		'"
 
-		sleep 10
+		sleep 5
 
 		docker exec ros2_humble bash -lc "
 		cd /root/ros2_ws &&
@@ -58,12 +58,12 @@ for i in {1..10}; do
 			--ros-args \
 			-p instance_id:=0 \
 			-p instance_count:=1\
-			-p benchmark_number:=\"${i}\" \
-			-p sensor_count:=\"${j}\" \
+			-p benchmark_number:=\\\"${i}\\\" \
+			-p sensor_count:=\\\"${j}\\\" \
 			-p benchmark_duration_sec:=180 \
 			-p start_signal_delay_sec:=3 
 		"
 
-		sleep 30
+		sleep 5
 	done
 done

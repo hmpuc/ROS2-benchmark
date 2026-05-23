@@ -69,8 +69,8 @@ public:
         // QoS
         auto qos =
             rclcpp::QoS(
-                rclcpp::KeepLast(4096))
-                .reliable();
+                rclcpp::KeepLast(128))
+                .best_effort();
 
 		auto start_qos = rclcpp::QoS(rclcpp::KeepLast(1))
 			.reliable()
@@ -297,7 +297,7 @@ private:
 
 	rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr start_subscription_;
 
-	rclcpp::Clock clock_{RCL_STEADY_TIME};
+	rclcpp::Clock clock_{RCL_SYSTEM_TIME};
 };
 
 int main(int argc, char * argv[])
@@ -307,21 +307,7 @@ int main(int argc, char * argv[])
     auto node =
         std::make_shared<SensorPublisher>();
 
-    //
-    // REAL concurrent publishers
-    //
-
-	int threads = std::thread::hardware_concurrency();
-
-	if (threads <= 0) {
-		throw std::runtime_error("thread must be > 0");
-	}
-
-	printf("Threads: %d", threads);
-
-    rclcpp::executors::MultiThreadedExecutor executor(
-		rclcpp::ExecutorOptions(), 
-		threads);
+    rclcpp::executors::MultiThreadedExecutor executor;
 
     executor.add_node(node);
 
