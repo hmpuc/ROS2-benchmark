@@ -18,10 +18,24 @@ for i in {1..10}; do
 					-p publish_rate_hz:=100 \
 					-p payload_size_kb:=20 \
 					-p hardware_id:=0 \
-					-p instance_count:=1 \
+					-p instance_count:=2 \
 					-p benchmark_duration_sec:=180
 			'
 		" &
+
+		docker exec ros2_humble bash -lc "
+			cd /root/ros2_ws &&
+			. run_script.sh &&
+			export ROS_DOMAIN_ID=31 &&
+			ros2 run node_central node_central \
+				--ros-args \
+				-p instance_id:=1 \
+				-p instance_count:=2 \
+				-p benchmark_number:=\\\"${i}\\\" \
+				-p sensor_count:=\\\"${j}\\\" \
+				-p benchmark_duration_sec:=180 \
+				-p start_signal_delay_sec:=15
+		" & 
 
 		sleep 5
 		
@@ -33,7 +47,7 @@ for i in {1..10}; do
 			ros2 run node_central node_central \
 				--ros-args \
 				-p instance_id:=0 \
-				-p instance_count:=1 \
+				-p instance_count:=2 \
 				-p benchmark_number:=\\\"${i}\\\" \
 				-p sensor_count:=\\\"${j}\\\" \
 				-p benchmark_duration_sec:=180 \
