@@ -114,7 +114,7 @@ public:
             sensor.sequence = 0;
 
 			sensor.topic_index = 
-				std::hash<std::string>{}( sensor.name) % instance_count_;
+				((hardware_id_ * sensor_count_) + i) % instance_count_;
 
 			sensor.msg.raw_data.resize(payload_size_bytes_, 0xAA);
 			

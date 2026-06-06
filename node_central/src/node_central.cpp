@@ -360,6 +360,7 @@ private:
                 << "\n";
         }
 
+		file.flush();
         file.close();
 		std::string done_file =
 			filename + ".done";

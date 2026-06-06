@@ -401,6 +401,14 @@ battery_logs/
 
 
 export ROS_DOMAIN_ID=31
-export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-export FASTRTPS_DEFAULT_PROFILES_FILE=/root/fastdds.xml
-export ROS_LOCALHOST_ONLY=0
+
+
+net.core.rmem_max=2147483647
+net.core.rmem_default=2147483647
+net.core.wmem_max=2147483647
+net.core.wmem_default=2147483647
+net.ipv4.ipfrag_high_thresh=134217728
+net.ipv4.ipfrag_low_thresh=100663296
+net.ipv4.ipfrag_time=15
+net.core.netdev_max_backlog=30000
+net.core.netdev_budget=600

@@ -14,7 +14,7 @@ for i in {1..10}; do
 				. run_script.sh &&
 				export ROS_DOMAIN_ID=31 &&
 				ros2 run cassio_driver sensor_node --ros-args \
-					-p sensor_count:=${i} \
+					-p sensor_count:=${j} \
 					-p publish_rate_hz:=100 \
 					-p payload_size_kb:=20 \
 					-p hardware_id:=0 \
