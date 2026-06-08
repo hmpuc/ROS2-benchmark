@@ -1,0 +1,5 @@
+instance_id;sensor_name;received;lost;loss_percent;avg_latency_ms;max_latency_ms;avg_jitter_ms;max_jitter_ms
+0;Cassio_x2;18000;0;0;0.789858;9.95759;0.141278;9.1553
+0;Cassio_x0;18000;0;0;0.596454;5.9;0.0757644;5.38587
+1;Cassio_x3;18003;0;0;0.87028;5.8984;0.147271;4.91385
+1;Cassio_x1;18003;0;0;0.611903;6.22983;0.151236;5.55942
